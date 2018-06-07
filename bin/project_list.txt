@@ -1,0 +1,22 @@
+card:        user-web-admin saofu-oem-card saofu-mod-customer saofu-mod-member user-mod-customer user-mod-alipay user-api-pos user-mod-stats user-web-oem
+crm:         saofu-shop-crm saofu-mod-crm
+hop:         hop-client hop-web hop-mod-broker hop-mod-push hop-mod-oem
+dining:      dining-client dining-mobile
+mall:        mall-web-admin mall-mod-booking mall-mod-cart mall-web-mobile mall-api-pos mall-mod-job mall-web-oem mall-mod-dal
+marketing:   marketing
+canyin:      canyin canyin-api-pos
+open:        open-web-admin open-mod-api open-mod-broker open-mod-third open-mod-gateway
+pay:         pay-web-shop invoice-web-shop invoice-web-oem saofu-mod-pay saofu-mod-trade order-mod-service order-mod-facade payment-mod-service payment-mod-extranet invoice-mod-service invoice-mod-facade pay-mod-message cashier-mod-service pay-mod-job payment-mod-facade pay-web-oem payment-web-alipay invoice-api-pos payment-api-pos
+shop:        weixin-api saofu-shop-shop saofu-shop-sys saofu-mod-shop saofu-mod-weixin saofu-mod-sys  saofu-mod-ditui shop-mod-sms shop-mod-job saofu-agent-admin saofu-agent-web bossapp shop-api-pos shop-mod-industry
+waimai:      waimai waimaimng waimai-web
+wxapp:       wxapp wxapp-mgr wxapp-mod-auth wxapp-web-api wxapp-web-admin wxapp-service wxapp-web-oem
+yunnex:      saofu-client saofu-mobile saofu-web saofu-weixin user-web-mobile saofu-mod-broker invoice-web-mobile pos-api-gw canyin-web-mobile
+promotion:   promotion-app-push promotion-mod-marketing promotion-mod-dal promotion-mod-job saofu-mod-card promotion-web-admin promotion-web-oem promotion-api-pos promotion-mod-coupon
+component:   shorturl-web yunnex-mod-config yunnex-mod-foundation yunnex-admin
+linesvr:     linesvr-web linesvr-mod-service linesvr-api-pos linesvr-web-admin linesvr-web-mobile
+advertise:   advertise-web-admin  advertise-web-oem advertise-mod-cart
+stats:       saofu-mod-stats
+sms:         notification-mod-job notification-mod-sms notification-mod-message
+bigdata:     bigdata-mod-customer yunnex-mod-consumer
+msgc:        push-mod-notification push-mod-job push-mod-message push-api-mix
+databus:     databus-mod-serializer databus-mod-binlog databus-mod-dispatcher databus-mod-metaserver databus-mod-admin

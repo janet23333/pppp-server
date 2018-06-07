@@ -1,0 +1,4 @@
+saofu-weixin 			pay
+canyin 					ROOT
+advertise-web-admin 	juyinke-web-admin
+advertise-web-oem 		juyinke-web-oem
