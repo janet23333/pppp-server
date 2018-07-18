@@ -1,4 +1,5 @@
 import jwt
+import json
 from jwt import InvalidTokenError
 from tornado.log import app_log
 
@@ -23,11 +24,10 @@ def validate_requests(func):
             raise HTTPError(status_code=401, reason="Unauthorized,Missing token")
         try:
             payload = jwt.decode(token, settings['token_secret'], algorithms=['HS256'])
-            app_log.info(payload)
+            app_log.info(json.dumps(payload))
             _self.payload = payload
 
             return func(*args, **kwargs)
-
         except InvalidTokenError as e:
             raise HTTPError(status_code=401, reason=str(e))
 

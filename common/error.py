@@ -6,5 +6,5 @@ class InvalidUrlException(Exception):
     pass
 
 
-class ArchivePakageException(Exception):
+class ArchivePackageException(Exception):
     pass

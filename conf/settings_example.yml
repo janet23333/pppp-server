@@ -26,10 +26,40 @@ ansible:
     module_path: '/data/env/python36publish-server/lib/python3.6/site-packages/ansible/modules'
 
 sh_path: /data/web/publish-server/sh
-remote_sh_path: /data/sh
-download_package_path: /home/data/project/release
-inventory: /home/data/project/inventory
+
+project_root_path: /home/data/project
 cmdb_server:
     url: http://cmdb.ops.yunnex.com/api
     token: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1c2VybmFtZSI6ImRldm9wcyIsImVtYWlsIjoiZGV2b3BzQHl1bm5leC5jb20iLCJwaG9uZSI6IjE4MTg4NjE2MTA2IiwiZnVsbG5hbWUiOiJkZXZvcHMiLCJkZXBhcnRtZW50X25hbWUiOlsiXHU4ZmQwXHU3ZWY0XHU1ZGU1XHU3YTBiXHU5MGU4Il19.FIDqQxcq2EePLZ-MNeOqqTk7qQ84uXcgvq39RQfpW1w
 
+package_source_url: http://10.10.50.30/project
+
+# 特殊的mod，同时需要操作nginx
+special_mod_name:
+    - order-mod-facade
+    - cashier-mod-service
+    - saofu-mod-broker
+    - saofu-mod-ditui
+    - yunnex-mod-foundation
+    - mall-mod-cart
+    - open-mod-api
+    - marketing
+    - canyin
+    - waimai
+
+dubbo_admin:
+    authkey: 'yunnex'
+    yunnex_admin_url: 'http://192.168.1.88:8020/yunnex-admin'
+    error_name:
+        promotion-mod-job: promotion-app-scheduler
+        user-mod-card: promotion-mod-card
+        promotion-api-pos: saofu-client
+        shop-api-pos: saofu-client
+        stats: saofu-monitor-web
+        user-web-mobile: user-mobile-web
+        wxapp-web-api: wxapp-web
+
+    origin_name:
+       - marketing
+       - canyin
+       - waimai

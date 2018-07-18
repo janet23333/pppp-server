@@ -1,39 +1,17 @@
+from common.sdk.ansible import exec_ansible
 from common.sdk.cmdb_sdk import CmdbSdk
 from conf import settings
-from tasks.log_task import insert_audit_log
-from tornado.log import app_log
 
 url = settings['cmdb_server']['url']
 token = settings['cmdb_server']['token']
 CMDB = CmdbSdk(host=url, token=token)
 
-save_path = settings['inventory']
 
-
-def audit_log(handler, description, resource_type, resource_id, visible=True):
-    if visible:
-        visible_ = 1
-    else:
-        visible_ = 0
-
-    insert_audit_log.delay(
-        user_id=handler.user['id'],
-        resource_type=resource_type,
-        resource_id=resource_id,
-        description=description,
-        visible=visible_,
-        method=handler.request.method,
-        path=handler.request.path,
-        fullpath=handler.request.protocol + '://' + handler.request.host + handler.request.uri,
-        body=handler.request.body)
-
-
-def run_ansible(cmdstr, host, become=False, become_user=None, module='shell'):
-    from common.sdk.ansible import exec_ansible
+def run_ansible(cmdstr, host, become=False, become_user=None, module='script'):
     tasks = [
-            dict(action=dict(module=module, args=cmdstr), register='shell_out'),
-            # dict(action=dict(module='debug', args=dict(msg='{{shell_out.stdout}}')))
-        ]
+        dict(action=dict(module=module, args=cmdstr), register='shell_out'),
+        # dict(action=dict(module='debug', args=dict(msg='{{shell_out.stdout}}')))
+    ]
     result = exec_ansible(
         host=host,
         tasks=tasks,
@@ -54,7 +32,12 @@ def get_cmdb_application_type():
 
 
 def get_cmdb_host(kwargus):
-    res = CMDB.get('host', **kwargus)
+    res = CMDB.get('host?page=1&page_size=100000', **kwargus)
+    return res
+
+
+def get_cmdb_host_application(kwargus):
+    res = CMDB.get('host_application_multiple?page=1&page_size=100000', **kwargus)
     return res
 
 
@@ -76,14 +59,13 @@ def get_pkg_type(application_name, cmdb_application_type_dict=None):
 
 def check_status(status_list):
     """用于检查pattern_host/pattern状态"""
-    app_log.debug('check status: %s' % str(status_list))
 
-    # 失败
-    if 3 in status_list:
-        status = 3
     # 执行中
-    elif 1 in status_list:
+    if 1 in status_list:
         status = 1
+    # 失败
+    elif 3 in status_list:
+        status = 3
     # 待执行 全部0
     elif 0 in status_list and 2 not in status_list:
         status = 0

@@ -1,23 +1,23 @@
 #!/bin/bash
 #python_path="/data/env/python36/bin/python"
 #program="/data/application/cmdb-agent/cmdb-agent.py"
-
+set -x
 python_path="/data/svr/python-env/bin/python"
 program="/data/svr/cmdb-agent/cmdb-agent.py"
-
+shell_name=$(/bin/basename $0)
 if [[ ! -d '/home/product' ||  $(grep -c product /etc/passwd |wc -l) -eq 0 ]]; then
     echo 'user product is or /home/product is not exits'
     exit 1
 fi
 
-if [ $USER != "product" ];then
-    echo "请切换普通用户product下执行该脚本!"
-    exit 1
-fi
+pid=$(ps -ef |grep cmdb-agent.py|grep -v grep |awk '{print $2}')
 
+log() {
+    log_info=$1
+    echo "[$(/bin/date "+%Y-%m-%d %H:%M:%S")] pid:$$ ${shell_name}: ${log_info}"
+}
 
 cmdb_start() {
-      pid=$(ps -ef |grep cmdb-agent.py|grep -v grep |awk '{print $2}')
       if [[ $pid ]]; then
           echo "cmdb-agent (pid: $pid) is running, please don't start again"
           exit 0
@@ -34,7 +34,6 @@ cmdb_start() {
 
 
 cmdb_stop() {
-    pid=$(ps -ef |grep cmdb-agent.py|grep -v grep |awk '{print $2}')
     if test ! -z $pid; then
         kill -9 $pid
     fi
@@ -43,7 +42,6 @@ cmdb_stop() {
 
 
 cmdb_status() {
-      pid=$(ps -ef |grep cmdb-agent.py|grep -v grep |awk '{print $2}')
       if test -z $pid; then
           echo "cmdb-agent is stoped"
           exit 1
@@ -55,7 +53,11 @@ cmdb_status() {
 
 
 cmdb_refresh() {
-    kill -n 10 $(cat /tmp/cmdb-agent.pid)
+    kill -10 $pid 2>/dev/null
+    retval=$? && [ $retval = 0 ] &&  log "[info] [func:cmdb_refresh] ${project_name} cmdb 更新成功.............."
+    if [ $retval -ne 0 ];then
+        log "[waring] [func:cmdb_refresh] ${project_name} cmdb 更新失败.............." ; exit 1
+    fi
 }
 
 cmdb_restart() {

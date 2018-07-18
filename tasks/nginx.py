@@ -1,54 +1,56 @@
-from celery_worker import app
-from worker.commons import run_ansible
-from conf import settings
 from celery.utils.log import get_task_logger
+
+from celery_worker import app
+from conf import settings
+from tasks.base import AnsibleTask
+from worker.commons import run_ansible
 
 logger = get_task_logger(__name__)
 
-shell_script = 'sh -x {}/nginx.sh'.format(settings['remote_sh_path'])
+SHELL_SCRIPT = settings['sh_path'] + '/nginx.sh'
 
 
-@app.task
+@app.task(base=AnsibleTask)
 def start(host):
-    cmdstr = '{} start'.format(shell_script)
+    cmdstr = '{} start'.format(SHELL_SCRIPT)
     logger.info(cmdstr)
     res = run_ansible(cmdstr, host, become=True, become_user='root')
     logger.info(res)
     return res
 
 
-@app.task
+@app.task(base=AnsibleTask)
 def status(host):
-    cmdstr = '{} status'.format(shell_script)
-    res = run_ansible(cmdstr, host, become=False, become_user=None)
+    cmdstr = '{} status'.format(SHELL_SCRIPT)
+    res = run_ansible(cmdstr, host, become=True, become_user='root')
     return res
 
 
-@app.task
+@app.task(base=AnsibleTask)
 def reload(host):
-    cmdstr = '{} reload'.format(shell_script)
+    cmdstr = '{} reload'.format(SHELL_SCRIPT)
     res = run_ansible(cmdstr, host, become=True, become_user="root")
     return res
 
 
-@app.task
+@app.task(base=AnsibleTask)
 def restart(host):
-    cmdstr = '{} restart'.format(shell_script)
+    cmdstr = '{} restart'.format(SHELL_SCRIPT)
     res = run_ansible(cmdstr, host, become=True, become_user="root")
     return res
 
 
-@app.task
+@app.task(base=AnsibleTask)
 def stop(host):
-    cmdstr = '{} stop'.format(shell_script)
+    cmdstr = '{} stop'.format(SHELL_SCRIPT)
     logger.info(cmdstr)
     res = run_ansible(cmdstr, host, become=True, become_user='root')
     logger.info(res)
     return res
 
 
-@app.task
+@app.task(base=AnsibleTask)
 def configtest(host):
-    cmdstr = '{} configtest'.format(shell_script)
+    cmdstr = '{} configtest'.format(SHELL_SCRIPT)
     res = run_ansible(cmdstr, host, become=True, become_user="root")
     return res

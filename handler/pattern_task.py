@@ -23,11 +23,12 @@ class PatternTaskWebSocket(BaseWebSocket):
     """
 
     def open(self, callback_timeout=500):
-        super(PatternTaskWebSocket, self).open(callback_timeout=callback_timeout)
+        super().open(callback_timeout=callback_timeout)
         self.tasks_status = {}
         self.patterns_status = {}
 
     def on_message(self, message):
+        super().on_message(message)
         try:
             message = json.loads(message)
             self.message = message

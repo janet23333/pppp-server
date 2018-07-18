@@ -9,6 +9,13 @@ from ansible.vars.manager import VariableManager
 
 from conf import settings
 
+try:
+    from __main__ import display
+except ImportError:
+    from ansible.utils.display import Display
+
+    display = Display()
+
 MODULE_PATH = settings['ansible']['module_path']
 
 
@@ -19,47 +26,40 @@ class ResultCallback(CallbackBase):
         self.host_unreachable = {}
         self.host_failed = {}
 
-    """A sample basecallback plugin used for performing an action as results come in
-
-    If you want to collect all results into a single object for processing at
-    the end of the execution, look into utilizing the ``json`` basecallback plugin
-    or writing your own custom basecallback plugin
-    """
-
     def v2_runner_on_unreachable(self, result):
-        # self.host_unreachable[result._host.get_name()] = result
-        self.host_unreachable[result._host.get_name()] = {"unreachable": result._result.get("unreachable"),
-                                                          "msg": result._result.get("msg")}
-
-        # print(json.dumps({host.name: result._result}, indent=4))
+        display.warning('v2_runner_on_unreachable')
+        display.warning(result)
+        self.host_unreachable[result._host.get_name()] = {
+            "unreachable": result._result.get("unreachable"),
+            "msg": result._result.get("msg")}
 
     def v2_runner_on_failed(self, result, *args, **kwargs):
-        # self.host_failed[result._host.get_name()] = result
-        self.host_failed[result._host.get_name()] = {"stdout_lines": result._result.get("stdout_lines"),
-                                                     "stderr_lines": result._result.get("stderr_lines"),
-                                                     "cmd": result._result.get("cmd"),
-                                                     "delta": result._result.get("delta"),
-                                                     "start": result._result.get("start"),
-                                                     "msg": result._result.get("msg"),
-                                                     'end': result._result.get("end"),
-                                                     "rc": result._result.get("rc"),
-                                                     "changed": result._result.get("changed")
-                                                     }
+        display.warning('v2_runner_on_failed')
+        display.warning(result)
+        self.host_failed[result._host.get_name()] = {
+            "stdout_lines": result._result.get("stdout_lines"),
+            "stderr_lines": result._result.get("stderr_lines"),
+            "cmd": result._result.get("cmd"),
+            "delta": result._result.get("delta"),
+            "start": result._result.get("start"),
+            "msg": result._result.get("msg"),
+            'end': result._result.get("end"),
+            "rc": result._result.get("rc"),
+            "changed": result._result.get("changed")
+        }
 
     def v2_runner_on_ok(self, result, **kwargs):
-        """Print a json representation of the result
-
-        This method could store the result in an instance attribute for retrieval later
-        """
-        # self.host_ok[result._host.get_name()] = result
-        self.host_ok[result._host.get_name()] = {"stdout_lines": result._result.get("stdout_lines"),
-                                                 "stderr_lines": result._result.get("stderr_lines"),
-                                                 "cmd": result._result.get("cmd"),
-                                                 "delta": result._result.get("delta"),
-                                                 "start": result._result.get("start"),
-                                                 'end': result._result.get("end"),
-                                                 "rc": result._result.get("rc"),
-                                                 "changed": result._result.get("changed")}
+        display.warning('v2_runner_on_failed')
+        display.warning(result)
+        self.host_ok[result._host.get_name()] = {
+            "stdout_lines": result._result.get("stdout_lines"),
+            "stderr_lines": result._result.get("stderr_lines"),
+            "cmd": result._result.get("cmd"),
+            "delta": result._result.get("delta"),
+            "start": result._result.get("start"),
+            'end': result._result.get("end"),
+            "rc": result._result.get("rc"),
+            "changed": result._result.get("changed")}
 
 
 def exec_ansible(host, tasks, remote_user='product', become=False, become_user=None):
@@ -103,6 +103,7 @@ def exec_ansible(host, tasks, remote_user='product', become=False, become_user=N
     # actually run it
     tqm = None
     try:
+        display.warning(tasks)
         tqm = TaskQueueManager(
             inventory=inventory,
             variable_manager=variable_manager,
@@ -110,10 +111,11 @@ def exec_ansible(host, tasks, remote_user='product', become=False, become_user=N
             options=options,
             passwords=passwords,
             stdout_callback=results_callback
-            # Use our custom basecallback instead of the ``default`` basecallback plugin
-
         )
         tqm.run(play)
+    except Exception as e:
+        display.warning('error')
+        display.warning(e)
     finally:
         if tqm is not None:
             tqm.cleanup()
@@ -121,13 +123,10 @@ def exec_ansible(host, tasks, remote_user='product', become=False, become_user=N
     def get_result():
         results_raw = {'success': {}, 'failed': {}, 'unreachable': {}}
         for _hosts, result in results_callback.host_ok.items():
-            # results_raw['success'][_hosts] = result._result
             results_raw['success'][_hosts] = result
         for _hosts, result in results_callback.host_failed.items():
-            # results_raw['failed'][_hosts] = result._result
             results_raw['failed'][_hosts] = result
         for _hosts, result in results_callback.host_unreachable.items():
-            # results_raw['unreachable'][_hosts] = result._result
             results_raw['unreachable'][_hosts] = result
 
         return results_raw

@@ -91,3 +91,4 @@ sh/task
 .env
 ansible/
 sql/
+worker/test

@@ -4,7 +4,7 @@ from handler.base import BaseHandler
 from orm.db import session_scope
 from tasks.get_package import get_package
 from worker.run_task import run_celery_task
-from worker.commons import audit_log
+from tasks.log_task import audit_log
 
 
 class PackageOperationHandler(BaseHandler):

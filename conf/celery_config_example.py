@@ -9,6 +9,8 @@ CELERY_ACCEPT_CONTENT = ['json', 'msgpack']
 CELERYD_MAX_TASKS_PER_CHILD = 200
 CELERYD_CONCURRENCY = 20
 CELERY_TIMEZONE = 'Asia/Shanghai'
-CELERY_INCLUDE = ['tasks.cmdb_agent', 'tasks.nginx', 'tasks.dubbo', 'tasks.zabbix_agent',
-                  'tasks.get_package', 'tasks.rollback', 'tasks.deploy', 'tasks.service', 'tasks.send_shell',
-                  'tasks.callback', 'tasks.log_task', 'tasks.publish_plan']
+CELERY_INCLUDE = [
+    'tasks.cmdb_agent', 'tasks.nginx', 'tasks.dubbo', 'tasks.zabbix_agent', 'tasks.get_package', 'tasks.rollback',
+    'tasks.deploy', 'tasks.service', 'tasks.log_task', 'tasks.publish_plan', 'tasks.check_pattern_status',
+    'tasks.ansible_script'
+]

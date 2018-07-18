@@ -3,9 +3,8 @@ from tornado.web import HTTPError
 from handler.base import BaseHandler
 from orm.db import session_scope
 
-from tasks import nginx
 from worker.run_task import run_celery_task
-from worker.commons import audit_log
+from tasks.log_task import audit_log
 from common.authentication import validate_requests, validate_user_permission
 
 task_name_map = {
@@ -30,10 +29,11 @@ class NginxOperationHandler(BaseHandler):
         pattern_id = argus.pop('pattern_id', None)
         cmdstr = argus.pop('cmd', None)
         publish_host_ids = argus.pop('publish_host_ids', None)
-        publish_host_id_list = publish_host_ids.split(',')
-
         if not publish_host_ids or not cmdstr:
             raise HTTPError(status=400, reason="Missing arguments publish_host_ids")
+
+        publish_host_id_list = publish_host_ids.split(',')
+
         task_name = task_name_map[cmdstr]
         with session_scope() as ss:
             host_and_id_list = run_celery_task(

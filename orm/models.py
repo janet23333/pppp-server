@@ -2,6 +2,7 @@ from sqlalchemy import Column, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 from sqlalchemy.types import String, Text, Integer, DateTime, SmallInteger
+import json
 
 BaseModel = declarative_base()
 
@@ -77,7 +78,7 @@ class PublishPlan(TableMixin, BaseModel):
     # bugfix： 单个应用
     __tablename__ = 'publish_plan'
 
-    title = Column(String(128), server_default='', nullable=False)
+    title = Column(String(1024), server_default='', nullable=False)
     description = Column(String(1024), server_default='', nullable=False)
     application_list = relationship(
         'PublishApplication',
@@ -96,9 +97,11 @@ class PublishPlan(TableMixin, BaseModel):
     inventory_version = Column(String(128), server_default='', nullable=False, comment='inventory文件版本')
 
     status = Column(SmallInteger, server_default=text('0'), nullable=False,
-                    comment='1: 创建中 2：创建完成  3：创建失败  4:发版成功 5：发版失败 6：已回滚 7：已删除 8：发版中')
+                    comment='1: 创建中 2：创建完成  3：创建失败  4:发版成功 5：发版失败  7：已删除（此状态已废弃） 8：发版中 21: 回滚中 22: 回滚成功 23 回滚失败')
     type = Column(SmallInteger, server_default=text('0'), nullable=False, comment='发版计划类型. 0:小版本 1:大版本')
     finish_time = Column(DateTime, server_default=text('"0000-00-00 00:00:00"'), nullable=False, comment='完成时间')
+    publish_project_id = Column(Integer, server_default=text('0'), nullable=False)
+    is_delete = Column(SmallInteger, server_default='0', nullable=False, comment="是否已删除 0: no 1: yes")
 
     def to_dict(self):
         return {
@@ -112,7 +115,6 @@ class PublishPlan(TableMixin, BaseModel):
                 self.inventory_version,
             'application_list': [
                 publish_application.to_dict() for publish_application in self.application_list
-                if publish_application.current_flag == 1
             ],
             'create_time':
                 str(self.create_time),
@@ -125,7 +127,10 @@ class PublishPlan(TableMixin, BaseModel):
             'status':
                 self.status,
             'type':
-                self.type
+                self.type,
+            'is_delete':
+                self.is_delete,
+            'publish_project_id': self.publish_project_id
         }
 
 
@@ -137,11 +142,11 @@ class PublishApplication(TableMixin, BaseModel):
     application_name = Column(String(128), server_default='', nullable=False, comment='应用名称')
     application_type = Column(SmallInteger, server_default='1', nullable=False, comment='应用类型：1 web 2 mod')
     target_version = Column(String(128), server_default='', nullable=False, comment='需要发版的版本')
-    current_flag = Column(
-        SmallInteger, server_default=text('1'), nullable=False, comment='修改下载地址之后,创建新的publish application,并且将字段置为1')
-    jenkins_url = Column(String(128), server_default='', nullable=False, comment='jenkins下载地址')
+    jenkins_url = Column(String(256), server_default='', nullable=False, comment='jenkins下载地址')
+    deploy_real_path = Column(String(256), server_default='', nullable=False, comment='应用部署实际路径，非软链路径，从cmdb获取')
 
     publish_plan_id = Column(Integer, server_default=text('0'), nullable=False, comment='发版计划ID')
+    commit_id = Column(String(256), server_default='', nullable=False, comment='pakage commit id')
 
     host_list = relationship(
         'PublishHost',
@@ -220,10 +225,10 @@ class PublishTask(TableMixin, BaseModel):
             'celery_task_id': self.celery_task_id,
             'task_name': self.task_name,
             'publish_pattern_task_id': self.publish_pattern_task_id,
-            # 'start_time': str(self.start_time),
-            # 'end_time': str(self.end_time),
+            'start_time': str(self.start_time),
+            'end_time': str(self.end_time),
             'status': self.status,
-            # 'result': self.result,
+            'result': self.result,
             'script': self.script,
             'ansible_task': self.ansible_task.to_dict() if self.ansible_task is not None else None,
             'create_time': str(self.create_time),
@@ -273,7 +278,7 @@ class AuditLog(TableMixin, BaseModel):
         SmallInteger,
         server_default='0',
         nullable=False,
-        comment='操作资源类型 1:publish_plan 2:publish_application 3:publish_host 4:pattern')
+        comment='操作资源类型 1:publish_plan 2:publish_application 3:publish_host 4:publish_pattern 5:publish_project')
     resource_id = Column(Integer, server_default='0', nullable=False, comment='操作资源id')
     publish_plan = relationship(
         'PublishPlan',
@@ -299,6 +304,12 @@ class AuditLog(TableMixin, BaseModel):
         primaryjoin='AuditLog.resource_id == PublishPattern.id',
         uselist=False,
         doc='publish_pattern')
+    publish_project = relationship(
+        'PublishProject',
+        foreign_keys='AuditLog.resource_id',
+        primaryjoin='AuditLog.resource_id == PublishProject.id',
+        uselist=False,
+        doc='publish_project')
     description = Column(String(128), server_default='', nullable=False, comment='操作描述')
     visible = Column(SmallInteger, server_default='1', nullable=False, comment='前端是否可见 1: True 0: False')
     method = Column(String(64), server_default='', nullable=False, comment='请求方法')
@@ -333,6 +344,7 @@ class AuditLog(TableMixin, BaseModel):
             2: self.publish_application,
             3: self.publish_host,
             4: self.publish_pattern,
+            5: self.publish_project,
         }
 
         resource = type_map.get(self.resource_type)
@@ -342,37 +354,15 @@ class AuditLog(TableMixin, BaseModel):
         return None
 
 
-class HostLog(TableMixin, BaseModel):
-    __tablename__ = 'host_log'
-    host_name = Column(String(128), server_default='', nullable=False, comment='host name')
-    host_ip = Column(String(128), server_default='', nullable=False, comment='host ip')
-    publish_host_id = Column(Integer, server_default='0', nullable=False, comment='关联publish_host表id')
-    task_name = Column(String(128), server_default='', nullable=False, comment='任务名称')
-    task_status = Column(String(128), server_default='', nullable=False, comment='任务状态：开始，成功，失败')
-
-    def to_dict(self):
-        result = {
-            'id': self.id,
-            'create_time': str(self.create_time),
-            'update_time': str(self.update_time),
-            'host_name': self.host_name,
-            'host_ip': self.host_ip,
-            'task_name': self.task_name,
-            'task_status': self.task_status,
-            'publish_host_id': self.publish_host_id
-        }
-
-        return result
-
-
 class PublishPattern(TableMixin, BaseModel):
     __tablename__ = 'publish_pattern'
 
     publish_plan_id = Column(Integer, server_default='0', nullable=False, comment='关联publish_plan_id')
     step = Column(Integer, server_default='0', nullable=False, comment='记录执行顺序')
-    title = Column(String(64), server_default='0', nullable=False, comment='标题')
-    note = Column(String(4096), server_default='0', nullable=False, comment='备注')
-    action = Column(Integer, server_default='0', nullable=False, comment='动作 1: 发布 2: 停服务 3: 提示')
+    title = Column(String(1024), server_default='', nullable=False, comment='标题')
+    note = Column(String(4096), server_default='', nullable=False, comment='备注')
+    action = Column(Integer, server_default='0', nullable=False,
+                    comment='动作 1: 发布 2: 停服务 3: 提示  11: 回滚发布 12：回滚启动服务 13: 回滚提示 14: 回滚停止服务  19:回滚到一半进行停顿')
     publish_pattern_host_list = relationship(
         'PublishPatternHost',
         uselist=True,
@@ -450,4 +440,58 @@ class PublishPatternTask(TableMixin, BaseModel):
             'publish_pattern_host_id': self.publish_pattern_host_id,
             'task_name': self.task_name,
             'status': self.status
+        }
+
+
+class PublishProject(TableMixin, BaseModel):
+    __tablename__ = 'publish_project'
+
+    name = Column(String(128), server_default='', nullable=False, comment='项目名')
+    status = Column(SmallInteger, server_default='0', nullable=False, comment='项目状态 0: open 1: close')
+    is_delete = Column(SmallInteger, server_default='0', nullable=False, comment="是否已删除 0: no 1: yes")
+    create_user_id = Column(Integer, server_default='0', nullable=False, comment="创建人")
+    create_user = relationship(
+        'User',
+        foreign_keys='PublishProject.create_user_id',
+        primaryjoin='PublishProject.create_user_id == User.id',
+        uselist=False,
+        doc='创建人')
+    plan_list = relationship(
+        'PublishPlan',
+        foreign_keys='PublishPlan.publish_project_id',
+        cascade="all, delete-orphan",
+        backref="publish_project",
+        primaryjoin='PublishPlan.publish_project_id==PublishProject.id')
+
+    def to_dict(self, return_resource=False):
+        res = {
+            'id': self.id,
+            'create_time': str(self.create_time),
+            'update_time': str(self.update_time),
+            'name': self.name,
+            'status': self.status,
+            'is_delete': self.is_delete,
+            'create_user': self.create_user.to_dict() if self.create_user is not None else None,
+        }
+        if return_resource:
+            res['plan_list'] = [p.to_dict() for p in self.plan_list]
+        return res
+
+
+class PublishScript(TableMixin, BaseModel):
+    __tablename__ = 'publish_script'
+    name = Column(String(128), server_default='', nullable=False, comment='脚本名称')
+    alias = Column(String(128), server_default='', nullable=False, comment='脚本别名')
+    arguments = Column(String(1024), server_default='[]', nullable=False, comment='脚本参数')
+    become_user = Column(String(64), server_default='', nullable=False, comment='使用sudo的用户')
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'create_time': str(self.create_time),
+            'update_time': str(self.update_time),
+            'name': self.name,
+            'alias': self.alias,
+            'arguments': json.loads(self.arguments),
+            'become_user': self.become_user,
         }

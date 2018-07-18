@@ -1,35 +1,43 @@
 import celery
-from tornado.log import app_log
+from celery.utils.log import get_task_logger
 
 from celery_worker import app
 from orm.db import session_scope
-from orm.models import AuditLog, HostLog
+from orm.models import AuditLog
+
+logger = get_task_logger(__name__)
 
 
-class AuditError(Exception):
-    pass
+class LogTask(celery.Task):
+    def on_success(self, retval, task_id, args, kwargs):
+        logger.info(
+            'my task success and taskid is {} ,retval is{} ,args is{}.kwargs id {}'.format(task_id, retval, args,
+                                                                                           kwargs))
 
-
-class CallbackTask(celery.Task):
     def on_failure(self, exc, task_id, args, kwargs, einfo):
-        app_log.error('Write audit log error, taskid: {task_id}, args: {args},  kwargs: {kwargs}, msg: {exc}'.format(
-            task_id=str(task_id), args=str(args), kwargs=str(kwargs), exc=str(exc)))
+        logger.error('{0!r} failed: {1!r}'.format(task_id, exc))
 
 
-@app.task(base=CallbackTask)
+@app.task(base=LogTask)
 def insert_audit_log(**kwargs):
     with session_scope() as ss:
         auditlog = AuditLog(**kwargs)
         ss.add(auditlog)
 
 
-@app.task(base=CallbackTask)
-def insert_host_log(host, task_name, task_status):
-    with session_scope() as ss:
-        host_log = HostLog()
-        host_log.host_name = host['host_name']
-        host_log.host_ip = host['host_ip']
-        host_log.publish_host_id = host['publish_host_id']
-        host_log.task_name = task_name
-        host_log.task_status = task_status
-        ss.add(host_log)
+def audit_log(handler, description, resource_type, resource_id, visible=True):
+    if visible:
+        visible_ = 1
+    else:
+        visible_ = 0
+
+    insert_audit_log.delay(
+        user_id=handler.user['id'],
+        resource_type=resource_type,
+        resource_id=resource_id,
+        description=description,
+        visible=visible_,
+        method=handler.request.method,
+        path=handler.request.path,
+        fullpath=handler.request.protocol + '://' + handler.request.host + handler.request.uri,
+        body=handler.request.body)

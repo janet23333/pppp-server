@@ -1,4 +1,3 @@
-from celery.result import AsyncResult
 from tornado.web import HTTPError
 
 from handler.base import BaseHandler, BaseWebSocket
@@ -21,45 +20,25 @@ class TaskStatusHandler(BaseHandler):
 
 
 class TaskStatusWebSocket(BaseWebSocket):
+    def open(self, callback_timeout=500):
+        super().open(callback_timeout=callback_timeout)
+        self.taskids = []
 
-    def get_task_resutl(self, ss, taskid):
-        qq = ss.query(PublishTask).filter(PublishTask.celery_task_id == taskid).first()
-        res = qq.to_dict() if qq else {}
-        return res
-
-    def on_message(self, taskids):
-        taskids = taskids.split(',')
-        pending_task = []
-        with session_scope() as ss:
-            for taskid in taskids:
-                async_result = AsyncResult(taskid)
-                ready_index = async_result.ready()
-                if ready_index:
-                    res = self.get_task_resutl(ss, taskid)
-                    self.render_json_response(res)
-                else:
-                    res = self.get_task_resutl(ss, taskid)
-                    self.render_json_response(res)
-                    pending_task.append(async_result)
-        self.pending_task = pending_task
+    def on_message(self, message):
+        super().on_message(message)
+        self.taskids.append(message)
 
     def callback(self):
-        # pass
-        if self.pending_task and len(self.pending_task) > 0:
+        if len(self.taskids) > 0:
             try:
+                _temp_ids = []
                 with session_scope() as ss:
-                    for task in self.pending_task:
-                        # if task.status in ['FAILURE', 'SUCCESS']:
-                        ready_index = task.ready()
-                        if ready_index:
-                            task_id = task.id
-                            res = self.get_task_resutl(ss, task_id)
+                    for task_id in self.taskids:
+                        qq = ss.query(PublishTask).filter(PublishTask.celery_task_id == task_id).first()
+                        res = qq.to_dict() if qq else {}
+                        if res.get('status') == 'SUCCESS':
                             self.render_json_response(res)
-                            self.pending_task.remove(task)
-                        else:
-                            task_id = task.id
-                            res = self.get_task_resutl(ss, task_id)
-                            self.render_json_response(res)
-
+                            _temp_ids.append(task_id)
+                self.taskids = [x for x in self.taskids if x not in _temp_ids]
             except Exception as inst:
                 self.render_json_response("Inter Server Error ： {}".format(inst))

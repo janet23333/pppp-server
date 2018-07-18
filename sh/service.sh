@@ -218,7 +218,11 @@ service() {
                     sleep 1
                     #TODO:CD到mod目录
                     cd $modpath
-                    nohup java -Dapp=${project_name} $opts -classpath '.:./*:lib/*' yunnex.saofu.core.Portal > /dev/null 2>&1 &
+                    if [ -f /home/product/.yunnex/skywalking-agent/skywalking-agent.jar ];then
+                        nohup java -Dapp=${project_name} $opts -Dskywalking.agent.application_code=${project_name} -javaagent:/home/product/.yunnex/skywalking-agent/skywalking-agent.jar -classpath '.:./*:lib/*' yunnex.saofu.core.Portal > /dev/null 2>&1  &
+                    else
+                        nohup java -Dapp=${project_name} $opts -classpath '.:./*:lib/*' yunnex.saofu.core.Portal > /dev/null 2>&1  &
+                    fi
                     log "[info] [func:service] ${project_name} 服务启动成功......."
                   fi
             fi
@@ -244,19 +248,6 @@ service() {
                     [ "${project_type}"x == "app"x ] && $nginx stop > /dev/null && log "[info] [func:service] ${project_name} Nginx关闭成功......."
                     if [ $? -ne 0 ];then
                         log "[error] [func:service] ${project_name} Nginx关闭失败......" && exit 1
-                    fi
-                    if [ "${project_name}" == "order-mod-facade" -o "${project_name}" == "cashier-mod-service" -o "${project_name}" == "saofu-mod-broker" -o "${project_name}" == "saofu-mod-ditui" -o "${project_name}" == "yunnex-mod-foundation" -o "${project_name}" == "mall-mod-cart" -o "${project_name}" == "open-mod-api" ];then
-                        $nginx stop  && log "[info] [func:service] ${project_name} Nginx关闭成功......."
-                        if [ $? -ne 0];then
-                            log "[error] [func:service] ${project_name} Nginx关闭失败......" && exit 1
-                        fi
-
-                    fi
-                    if [ "${project_name}" == "waimai" -o "${project_name}" == "canyin" -o "${project_name}" == "marketing" ]; then
-                        $dubbo disable && log "[info] [func:service] ${project_name} Dubbo 禁用成功......."
-                        if [ $? -ne 0 ];then
-                            log "[error] [func:service] ${project_name} Dubbo 禁用失败......" && exit 1
-                        fi
                     fi
                     log "[info] [func:service] ${project_name} 正在关闭服务进程......"
                     ${project_container_dir}/bin/shutdown.sh &> /dev/null

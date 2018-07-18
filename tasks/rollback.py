@@ -1,17 +1,19 @@
-from celery_worker import app
-from worker.commons import run_ansible
-from conf import settings
 from celery.utils.log import get_task_logger
+
+from celery_worker import app
+from conf import settings
+from tasks.base import AnsibleTask
+from worker.commons import run_ansible
 
 logger = get_task_logger(__name__)
 
-shell_script = 'sh -x {}/rollback.sh'.format(settings['remote_sh_path'])
+SHELL_SCRIPT = settings['sh_path'] + '/rollback.sh'
 
 
-@app.task
-def run(host, version, project_name):
-    cmdstr = '{} {} {}'.format(shell_script, project_name, version)
+@app.task(base=AnsibleTask)
+def run(host, version, project_name, **kwargs):
+    cmdstr = '{} {} {}'.format(SHELL_SCRIPT, project_name, version)
     logger.info(cmdstr)
-    res = run_ansible(cmdstr, host, become=False, become_user=None, module='shell')
+    res = run_ansible(cmdstr, host, become=False, become_user=None)
     logger.info(res)
     return res

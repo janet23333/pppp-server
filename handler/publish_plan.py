@@ -1,27 +1,24 @@
 import json
-from celery import uuid
 from datetime import datetime
 from json.decoder import JSONDecodeError
+
+from celery import uuid
 from sqlalchemy import desc
-from tornado.log import app_log
 
 from common import util
 from common.authentication import validate_requests, validate_user_permission
+from common.error import PublishError
 from common.util import take_out_unrightful_arguments
 from handler.base import BaseHandler, HTTPError
 from handler.base import BaseWebSocket
 from orm.db import session_scope
-from orm.models import PublishPlan, PublishApplication, PublishHost
-from orm.models import PublishPattern, PublishPatternHost, PublishPatternTask
-from tasks.callback import create_publish_plan_failed_callback
-from tasks.callback import create_publish_plan_success_callback
-
-from tasks.publish_plan import down_load_and_archive_package
-from worker.commons import audit_log
-from worker.pattern_task import get_action_tasks
-from common.error import PublishError
-from orm.field_map import publish_host_flag_map
 from orm.field_map import application_type_map
+from orm.field_map import publish_host_flag_map
+from orm.models import PublishPattern, PublishPatternHost, PublishPatternTask
+from orm.models import PublishPlan, PublishApplication, PublishHost
+from tasks.log_task import audit_log
+from tasks.publish_plan import down_load_and_archive_package
+from worker.run_task import get_action_tasks
 
 json_encoder = util.json_encoder
 
@@ -83,6 +80,7 @@ class PublishPlanHandler(BaseHandler):
             { 
                 "application_name": "canyin",
                 "application_type":1,
+                "application_deploy_path":'xx/xx',
                 "jenkins_url":'xxxx',
                 "host_list":[
                     {
@@ -132,6 +130,7 @@ class PublishPlanHandler(BaseHandler):
             publish_plan.create_user_id = user_id
             publish_plan.status = 1  # 正在创建发版
             publish_plan.inventory_version = inventory_version
+            publish_plan.publish_project_id = arguments.pop('publish_project_id')
             ss.add(publish_plan)
             ss.flush()
             publish_plan_id = publish_plan.id
@@ -148,6 +147,7 @@ class PublishPlanHandler(BaseHandler):
                     publish_application.application_type = application_type_num
                     publish_application.jenkins_url = application['jenkins_url']
                     publish_application.publish_plan_id = publish_plan_id
+                    publish_application.deploy_real_path = application['application_deploy_path']
                     # publish_application.target_version = target_version  后面update
                     ss.add(publish_application)
                     ss.flush()
@@ -203,7 +203,8 @@ class PublishPlanHandler(BaseHandler):
                     try:
                         tasks = get_action_tasks(
                             action=pattern_dict['action'],
-                            application_type=publish_application_dict[pattern_application_name]["type"]
+                            application_type=publish_application_dict[pattern_application_name]["type"],
+                            application_name=pattern_application_name
                         )
                     except PublishError as e:
                         raise HTTPError(status_code=400, reason=str(e))
@@ -212,16 +213,12 @@ class PublishPlanHandler(BaseHandler):
                     ss.flush()
 
         task_id = uuid()
-        down_load_and_archive_package.apply_async(args=[jenkins_url_list, inventory_version, publish_plan_id],
-                                                  task_id=task_id,
-                                                  link=create_publish_plan_success_callback.si(publish_plan_id),
-                                                  link_error=create_publish_plan_failed_callback.si(
-                                                      publish_plan_id, taskid=task_id)
-                                                  )
-
+        down_load_and_archive_package.apply_async(
+            kwargs={'jenkins_url_list': jenkins_url_list, 'inventory_version': inventory_version,
+                    'publish_plan_id': publish_plan_id}, task_id=task_id)
         audit_log(self, description='创建发版计划', resource_type=1, resource_id=publish_plan_id)
 
-        self.render_json_response(code=200, msg="OK", publish_plan_id=publish_plan_id)
+        self.render_json_response(code=200, msg="OK", publish_plan_id=publish_plan_id, task_id=task_id)
 
     @validate_requests
     @validate_user_permission('put')
@@ -262,7 +259,7 @@ class PublishPlanHandler(BaseHandler):
             raise HTTPError(status_code=400, reason="ID is required")
 
         with session_scope() as ss:
-            ss.query(PublishPlan).filter_by(id=_id).update({'status': 7})
+            ss.query(PublishPlan).filter_by(id=_id).update({'is_delete': 1})
 
         audit_log(self, description='删除发版计划', resource_type=1, resource_id=_id)
         self.render_json_response(code=200, msg='ok', res={'id': _id})
@@ -289,10 +286,11 @@ class PublishPlanWebSocket(BaseWebSocket):
         :param message:  { publish_plan_id :[]}
         :return:
         """
+        super().on_message(message)
         try:
             message = json.loads(message)
-            app_log.info('(message is {}'.format(message))
             self.message = message
+            self.current_status = []
 
             if 'publish_plan_ids' not in message or not isinstance(message['publish_plan_ids'], list):
                 self.render_json_response(code=400, msg='Error ',
@@ -307,24 +305,18 @@ class PublishPlanWebSocket(BaseWebSocket):
 
     def callback(self):
         if self.message is None or len(self.message['publish_plan_ids']) < 1:
-            self.close()
             return
         with session_scope() as ss:
             publish_plan_ids = self.message['publish_plan_ids']
-            publish_plans = ss.query(PublishPlan).filter(PublishPlan.id.in_(publish_plan_ids)).all()
-            for publish_plan in publish_plans:
-                if publish_plan.status in [1, 3]:  # 还在创建中.或者创建失败
-                    pass
-                else:
-                    self.message['publish_plan_ids'].remove(publish_plan.id)
-                    res = publish_plan.to_dict()
-                    self.render_json_response(res)
+            publish_plans = ss.query(PublishPlan).filter(PublishPlan.id.in_(publish_plan_ids)).order_by(
+                PublishPlan.id).all()
 
-        if len(publish_plans) < 1:
-            self.render_json_response(code=400, msg='Invalid arguments',
-                                      res="Not Found PublishPlan with ids: {} in database".format(
-                                          self.message['publish_plan_ids']))
-            self.close()
+            new_status = [i.status for i in publish_plans]
+            if new_status != self.current_status:
+                res = [publish_plan.to_dict() for publish_plan in publish_plans]
+                self.render_json_response(res)
+
+            self.current_status = [i.status for i in publish_plans]
 
 
 class PlanRetryHandler(BaseHandler):
@@ -350,13 +342,57 @@ class PlanRetryHandler(BaseHandler):
             inventory_version = plan.inventory_version
             jenkins_url_list = [app.jenkins_url for app in plan.application_list]
 
-        task_id = uuid()
-        down_load_and_archive_package.apply_async(args=[jenkins_url_list, inventory_version, publish_plan_id],
-                                                  task_id=task_id,
-                                                  link=create_publish_plan_success_callback.si(publish_plan_id),
-                                                  link_error=create_publish_plan_failed_callback.si(
-                                                      publish_plan_id, taskid=task_id)
-                                                  )
+            task_id = uuid()
+            down_load_and_archive_package.apply_async(
+                kwargs={'jenkins_url_list': jenkins_url_list, 'inventory_version': inventory_version,
+                        'publish_plan_id': publish_plan_id},
+                task_id=task_id)
         audit_log(self, description='重试发版计划', resource_type=1, resource_id=publish_plan_id)
+        self.render_json_response(code=200, msg="OK", publish_plan_id=publish_plan_id, task_id=task_id)
 
-        self.render_json_response(code=200, msg="OK", publish_plan_id=publish_plan_id)
+    @validate_requests
+    @validate_user_permission('put')
+    def put(self, *args, **kwargs):
+        '''
+        修改应用包地址
+        :param args:
+        :param kwargs:
+        :return:
+        '''
+        argument = self.body_arguments
+        publish_plan_id = argument.pop('publish_plan_id', None)
+        application_argus = argument.pop('applications', None)
+        if publish_plan_id is None:
+            raise HTTPError(status_code=400, reason="Missing argument:publish_plan_id")
+        # new_inventory_version = str(datetime.now().strftime('%m%d%H%M'))
+
+        jenkins_url_list = []
+        with session_scope() as ss:
+            # update publish plan
+            publish_plan = ss.query(PublishPlan).filter_by(id=publish_plan_id).one_or_none()
+            if publish_plan is None:
+                raise HTTPError(status_code=400, reason="查找的publish_plan_id: {} 不存在 ".format(publish_plan_id))
+
+            # publish_plan.inventory_version = new_inventory_version
+            inventory_version = publish_plan.inventory_version
+            # 状态重置为创建中
+            publish_plan.status = 1
+            ss.flush()
+
+            # update publish application
+            for app_dict in application_argus:
+                publish_application_id = app_dict.pop('publish_application_id')
+                jenkins_url_list.append(app_dict['jenkins_url'])
+
+                q = ss.query(PublishApplication).filter_by(id=publish_application_id)
+                q.update(app_dict)
+
+            task_id = uuid()
+            down_load_and_archive_package.apply_async(
+                kwargs={'jenkins_url_list': jenkins_url_list,
+                        'inventory_version': inventory_version,
+                        'publish_plan_id': publish_plan_id},
+                task_id=task_id)
+
+        audit_log(self, description='修改应用包地址', resource_type=1, resource_id=publish_plan_id)
+        self.render_json_response(code=200, msg="OK", publish_plan_id=publish_plan_id, task_id=task_id)

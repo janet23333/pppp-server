@@ -1,5 +1,6 @@
 #!/bin/bash
 export path=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:~/bin
+set -x
 if [ $USER != "product" ];then
     echo "请切换普通用户product下执行该脚本!"
     exit 1
@@ -25,7 +26,7 @@ shell_name=$(/bin/basename $0)
 
 file_path=$(dirname $0)
 #script
-nginx="sudo sh -x $file_path/nginx.sh"
+#nginx="sudo sh -x $file_path/nginx.sh"
 
 
 
@@ -130,6 +131,18 @@ enable_dubbo_nginx() {
 }
 
 
+disable_dubbo_nginx() {
+        dubbo_disable && if [ `find /home/product/local/mods -type l 2>/dev/null| xargs -i ls -l {} | awk -F'/' '{print $NF}' \
+        | egrep 'order-mod-facade$|cashier-mod-service$|saofu-mod-broker$|saofu-mod-ditui$|yunnex-mod-foundation$|mall-mod-cart$|open-mod-api$' 2>/dev/null` ];then
+            $nginx stop &&  log "[info] [func:disable_dubbo_nginx] 模块:${project_name} Nginx服务停止成功."
+            if [ $? -ne 0 ];then
+                log "[error] [func:disable_dubbo_nginx] 模块:${project_name} Nginx服务停止失败"  && exit 1
+            fi
+        fi || exit 1
+}
+
+
+
 dubbo_enable_check(){
     check_response=$(/usr/bin/curl -s "${dubbo_app_list_url}?ip=${ip}&authkey=${authkey}")
     if echo "${check_response}"|grep '"enable":false' &>/dev/null ;then
@@ -158,10 +171,12 @@ else
 fi
 case $action in
     disable)
-        dubbo_disable
+        #disable_dubbo_nginx
+        disable_dubbo
     ;;
     enable)
-        enable_dubbo_nginx
+        #enable_dubbo_nginx
+        dubbo_enable
     ;;
     status)
         dubbo_status

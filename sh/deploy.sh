@@ -354,7 +354,13 @@ deploy() {
             $service $project_name stop || exit 1
             project_deploy || exit 1
             $service $project_name start || exit 1
-            $cmdb_agent refresh && log "[info] [func:deploy] ${project_name} cmdb 更新成功.............."
+            $cmdb_agent refresh
+            retval=$?
+            if [ $retval = 0 ];then
+                log "[info] [func:deploy] ${project_name} cmdb 更新成功.............."
+            else
+                log "[waring] [func:deploy] ${project_name} cmdb 更新失败.............." ; exit 1
+            fi
         done
         sleep $wait_start_time
         for project_name in `echo ${project_name_list}|sed 's/;/ /g'`;do

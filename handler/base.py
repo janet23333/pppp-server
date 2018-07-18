@@ -49,8 +49,16 @@ class BaseHandler(tornado.web.RequestHandler):
         return args[0]
 
     def write_error(self, status_code, **kwargs):
-        app_log.error("%s %s" % (status_code, self._reason))
         self.render_json_response(code=status_code, msg=self._reason)
+
+    def log_exception(self, typ, value, tb):
+        if isinstance(value, HTTPError):
+            if value.log_message:
+                warning_format = '%d %s: ' + value.log_message
+                args = ([value.status_code, self._request_summary()] + list(value.args))
+                app_log.warning(warning_format, *args)
+
+        app_log.error('Exception: %s\n%r', self._request_summary(), self.request, exc_info=(typ, value, tb))
 
     def get_user(self):
         token = self.get_query_argument('token', None)  # from url
@@ -155,4 +163,4 @@ class BaseWebSocket(WebSocketHandler):
         raise NotImplementedError
 
     def on_message(self, message):
-        self.message = message
+        app_log.info(message)

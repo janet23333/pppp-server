@@ -2,7 +2,6 @@ import yaml
 import os
 import sys
 
-
 conf_dir = '/data/conf/publish-server'
 settings_file_name = 'settings.yml'
 

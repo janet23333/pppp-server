@@ -3,8 +3,7 @@ from tornado.web import HTTPError
 from common.authentication import validate_requests, validate_user_permission
 from handler.base import BaseHandler
 from orm.db import session_scope
-from tasks import deploy
-from worker.commons import audit_log
+from tasks.log_task import audit_log
 from worker.run_task import run_celery_task
 
 

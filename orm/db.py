@@ -7,7 +7,6 @@ from sqlalchemy import orm
 from tornado.log import app_log
 
 from conf import settings
-from tornado.web import HTTPError
 
 DB_URL = settings['database_url']
 
@@ -16,6 +15,10 @@ db_kwargs = settings['database_config']
 Engine = create_engine(DB_URL, **db_kwargs)
 
 SESSION_MAKER = orm.sessionmaker(bind=Engine, autoflush=False)
+
+
+class DBError(Exception):
+    pass
 
 
 def init():
@@ -33,10 +36,10 @@ def session_scope():
         session.commit()
     except exc.IntegrityError as e:
         session.rollback()
-        raise HTTPError(status_code=400, reason=str(e))
+        raise DBError(str(e))
     except orm.exc.NoResultFound as e:
         session.rollback()
-        raise HTTPError(status_code=404, reason=str(e))
+        raise DBError(str(e))
     except exc.InvalidRequestError as e:
 
         error_info = e.args[0]
@@ -45,11 +48,12 @@ def session_scope():
             value = value.group(2)
             reason = "InvalidRequestError, arguments %s is not allowed" % value
         else:
+            app_log.error(str(e))
             reason = "InvalidRequestError, please check your request arguments"
         session.rollback()
-        raise HTTPError(status_code=400, reason=reason)
+        raise DBError(reason)
     except Exception as e:
         session.rollback()
-        raise HTTPError(status_code=400, reason=str(e))
+        raise e
     finally:
         session.close()

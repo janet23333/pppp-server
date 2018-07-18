@@ -1,17 +1,20 @@
-from celery_worker import app
-from worker.commons import run_ansible
-from conf import settings
 from celery.utils.log import get_task_logger
+
+from celery_worker import app
+from conf import settings
+from tasks.base import AnsibleTask
+from worker.commons import run_ansible
+
 logger = get_task_logger(__name__)
-shell_script = 'sh -x {}/get_package.sh'.format(settings['remote_sh_path'])
+SHELL_SCRIPT = settings['sh_path'] + '/get_package.sh'
 
 
-@app.task
-def get_package(host, version, project_name=None):
+@app.task(base=AnsibleTask)
+def get_package(host, version, project_name, **kwargs):
     if project_name:
-        cmdstr = '{} {} {}'.format(shell_script, project_name, version)
+        cmdstr = '{} {} {}'.format(SHELL_SCRIPT, project_name, version)
     else:
-        cmdstr = '{} {}'.format(shell_script, version)
+        cmdstr = '{} {}'.format(SHELL_SCRIPT, version)
     logger.info(cmdstr)
     res = run_ansible(cmdstr, host, become=False)
     logger.info(res)
