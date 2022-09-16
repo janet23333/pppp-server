@@ -13,7 +13,7 @@ greenlet==0.4.13
 idna==2.6
 kombu==4.1.0
 ldap3==2.3
-Mako==1.0.7
+Mako==1.2.2
 MarkupSafe==1.0
 mccabe==0.6.1
 more-itertools==4.1.0
